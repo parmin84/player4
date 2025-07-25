@@ -293,6 +293,13 @@ body {
     align-items: center;
     justify-content: center;
     box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        /* Mobile touch improvements */
+    -webkit-tap-highlight-color: rgba(253, 109, 148, 0.3);
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
 }
 
 .button i {
