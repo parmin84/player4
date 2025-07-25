@@ -1,6 +1,6 @@
 $(function () {
     console.log("Script starting...");
-    
+
     const playerTrack = $("#player-track");
     const bgArtwork = $("#player-bg-artwork");
     const albumName = $("#album-name");
@@ -16,45 +16,27 @@ $(function () {
     const tTime = $("#track-length");
     const i = playPauseButton.find("i");
 
-    let seekT,
-        seekLoc,
-        seekBarPos,
-        cM,
-        ctMinutes,
-        ctSeconds,
-        curMinutes,
-        curSeconds,
-        durMinutes,
-        durSeconds,
-        playProgress,
-        bTime,
-        nTime = 0,
-        buffInterval = null,
-        tFlag = false;
+    let seekT, seekLoc, seekBarPos, cM, ctMinutes, ctSeconds;
+    let curMinutes, curSeconds, durMinutes, durSeconds;
+    let playProgress, bTime, nTime = 0, buffInterval = null, tFlag = false;
 
-    let audio;
+    let audio = null;
+    let wakeLock = null;
+    let audioInitialized = false;
 
     function playPause() {
-        console.log("=== PLAY/PAUSE CLICKED ===");
-        console.log("Audio exists:", !!audio);
-        console.log("Audio src:", audio ? audio.src : "no audio");
-        console.log("Audio paused:", audio ? audio.paused : "unknown");
-        
         if (!audio) {
-            console.log("ERROR: Audio object not found!");
-            alert("Audio not loaded");
+            alert("Audio not loaded yet.");
             return;
         }
-        
+
         setTimeout(function () {
             if (audio.paused) {
-                console.log("Attempting to play...");
                 playerTrack.addClass("active");
                 albumArt.addClass("active");
                 checkBuffering();
                 i.attr("class", "fas fa-pause");
-                
-                // Handle mobile play promise
+
                 const playPromise = audio.play();
                 if (playPromise !== undefined) {
                     playPromise.then(() => {
@@ -62,7 +44,6 @@ $(function () {
                     }).catch(error => {
                         console.log("✗ Play failed:", error);
                         alert("Can't play: " + error.message);
-                        // Reset UI if play failed
                         playerTrack.removeClass("active");
                         albumArt.removeClass("active");
                         clearInterval(buffInterval);
@@ -71,7 +52,6 @@ $(function () {
                     });
                 }
             } else {
-                console.log("Pausing...");
                 playerTrack.removeClass("active");
                 albumArt.removeClass("active");
                 clearInterval(buffInterval);
@@ -83,14 +63,14 @@ $(function () {
     }
 
     function showHover(event) {
+        if (!audio || isNaN(audio.duration)) return;
+
         seekBarPos = sArea.offset();
         seekT = event.clientX - seekBarPos.left;
         seekLoc = audio.duration * (seekT / sArea.outerWidth());
 
         sHover.width(seekT);
-
         cM = seekLoc / 60;
-
         ctMinutes = Math.floor(cM);
         ctSeconds = Math.floor(seekLoc - ctMinutes * 60);
 
@@ -99,21 +79,19 @@ $(function () {
         if (ctMinutes < 10) ctMinutes = "0" + ctMinutes;
         if (ctSeconds < 10) ctSeconds = "0" + ctSeconds;
 
-        if (isNaN(ctMinutes) || isNaN(ctSeconds)) seekTime.text("--:--");
-        else seekTime.text(ctMinutes + ":" + ctSeconds);
-
-        seekTime.css({ left: seekT, "margin-left": "-21px" }).fadeIn(0);
+        seekTime.text(ctMinutes + ":" + ctSeconds).css({
+            left: seekT,
+            "margin-left": "-21px"
+        }).fadeIn(0);
     }
 
     function hideHover() {
         sHover.width(0);
-        seekTime
-            .text("00:00")
-            .css({ left: "0px", "margin-left": "0px" })
-            .fadeOut(0);
+        seekTime.text("00:00").css({ left: "0px", "margin-left": "0px" }).fadeOut(0);
     }
 
     function playFromClickedPos() {
+        if (!audio || isNaN(seekLoc)) return;
         audio.currentTime = seekLoc;
         seekBar.width(seekT);
         hideHover();
@@ -121,7 +99,6 @@ $(function () {
 
     function updateCurrTime() {
         nTime = new Date().getTime();
-
         if (!tFlag) {
             tFlag = true;
             trackTime.addClass("active");
@@ -129,31 +106,13 @@ $(function () {
 
         curMinutes = Math.floor(audio.currentTime / 60);
         curSeconds = Math.floor(audio.currentTime - curMinutes * 60);
-
         durMinutes = Math.floor(audio.duration / 60);
         durSeconds = Math.floor(audio.duration - durMinutes * 60);
 
         playProgress = (audio.currentTime / audio.duration) * 100;
 
-        if (curMinutes < 10) curMinutes = "0" + curMinutes;
-        if (curSeconds < 10) curSeconds = "0" + curSeconds;
-        if (durMinutes < 10) durMinutes = "0" + durMinutes;
-        if (durSeconds < 10) durSeconds = "0" + durSeconds;
-
-        tProgress.text(isNaN(curMinutes) ? "00:00" : `${curMinutes}:${curSeconds}`);
-        tTime.text(isNaN(durMinutes) ? "00:00" : `${durMinutes}:${durSeconds}`);
-
-        if (
-            isNaN(curMinutes) ||
-            isNaN(curSeconds) ||
-            isNaN(durMinutes) ||
-            isNaN(durSeconds)
-        ) {
-            trackTime.removeClass("active");
-        } else {
-            trackTime.addClass("active");
-        }
-
+        tProgress.text(`${pad(curMinutes)}:${pad(curSeconds)}`);
+        tTime.text(`${pad(durMinutes)}:${pad(durSeconds)}`);
         seekBar.width(playProgress + "%");
 
         if (playProgress === 100) {
@@ -165,6 +124,10 @@ $(function () {
         }
     }
 
+    function pad(n) {
+        return n < 10 ? "0" + n : n;
+    }
+
     function checkBuffering() {
         clearInterval(buffInterval);
         buffInterval = setInterval(function () {
@@ -173,22 +136,18 @@ $(function () {
             } else {
                 albumArt.removeClass("buffering");
             }
-
             bTime = new Date().getTime();
         }, 100);
     }
 
     function initPlayer() {
-        console.log("Initializing player...");
-        audio = new Audio();
-        audio.src = "https://raw.githubusercontent.com/parmin84/audio-player/main/11labs_studio.mp3";
+        console.log("Initializing audio...");
+
+        audio = new Audio("https://raw.githubusercontent.com/parmin84/audio-player/main/11labs_studio.mp3");
         audio.loop = false;
-        
-        // Mobile-specific audio setup
         audio.preload = 'metadata';
         audio.crossOrigin = 'anonymous';
 
-        // Set track info manually
         albumName.text("General Recommendations");
         trackName.text("Anticancer.ca");
 
@@ -198,134 +157,68 @@ $(function () {
         const bgArtworkUrl = $("#_1").attr("src");
         bgArtwork.css({ "background-image": "url(" + bgArtworkUrl + ")" });
 
-        // Enhanced event binding for mobile
-        playPauseButton.off('click').on("click touchstart", function(e) {
-            e.preventDefault();
-            console.log("Button clicked/touched!");
-            playPause();
-        });
-        
         sArea.mousemove(showHover);
         sArea.mouseout(hideHover);
         sArea.on("click", playFromClickedPos);
 
         $(audio).on("timeupdate", updateCurrTime);
-        
-        // Mobile-specific events
-        $(audio).on('canplaythrough', function() {
-            console.log('Audio can play through');
+        $(audio).on("loadedmetadata", () => {
+            setupMediaSession();
+            setupWakeLock();
         });
-        
-        $(audio).on('error', function(e) {
-            console.log('Audio error:', e);
+
+        $(audio).on("play", () => {
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
         });
-        
-        $(audio).on('loadstart', function() {
-            console.log('Audio load started');
+        $(audio).on("pause", () => {
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
         });
-        
-        console.log("Player initialized, audio src:", audio.src);
+
+        console.log("Player ready.");
     }
 
-    initPlayer();
-
-    // Media Session API implementation for background playback
     function setupMediaSession() {
-        if ('mediaSession' in navigator) {
-            // Set metadata
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title: trackName.text() || 'Audio Track',
-                artist: albumName.text() || 'Unknown Artist',
-                album: 'Audio Player',
-                artwork: [
-                    { src: $('#_1').attr('src'), sizes: '96x96', type: 'image/jpeg' },
-                    { src: $('#_1').attr('src'), sizes: '128x128', type: 'image/jpeg' },
-                    { src: $('#_1').attr('src'), sizes: '192x192', type: 'image/jpeg' },
-                    { src: $('#_1').attr('src'), sizes: '256x256', type: 'image/jpeg' },
-                    { src: $('#_1').attr('src'), sizes: '384x384', type: 'image/jpeg' },
-                    { src: $('#_1').attr('src'), sizes: '512x512', type: 'image/jpeg' }
-                ]
-            });
+        if (!('mediaSession' in navigator)) return;
 
-            // Set playback state
-            navigator.mediaSession.playbackState = audio.paused ? 'paused' : 'playing';
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: trackName.text() || 'Audio Track',
+            artist: albumName.text() || 'Unknown Artist',
+            album: 'Audio Player',
+            artwork: [96, 128, 192, 256, 384, 512].map(size => ({
+                src: $('#_1').attr('src'),
+                sizes: `${size}x${size}`,
+                type: 'image/jpeg'
+            }))
+        });
 
-            // Handle action events
-            navigator.mediaSession.setActionHandler('play', function() {
-                audio.play();
-                navigator.mediaSession.playbackState = 'playing';
-            });
+        navigator.mediaSession.setActionHandler('play', () => {
+            audio.play();
+        });
 
-            navigator.mediaSession.setActionHandler('pause', function() {
-                audio.pause();
-                navigator.mediaSession.playbackState = 'paused';
-            });
+        navigator.mediaSession.setActionHandler('pause', () => {
+            audio.pause();
+        });
 
-            navigator.mediaSession.setActionHandler('seekbackward', function(details) {
-                const skipTime = details.seekOffset || 10;
-                audio.currentTime = Math.max(audio.currentTime - skipTime, 0);
-            });
+        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+            const skip = details.seekOffset || 10;
+            audio.currentTime = Math.max(audio.currentTime - skip, 0);
+        });
 
-            navigator.mediaSession.setActionHandler('seekforward', function(details) {
-                const skipTime = details.seekOffset || 10;
-                audio.currentTime = Math.min(audio.currentTime + skipTime, audio.duration);
-            });
+        navigator.mediaSession.setActionHandler('seekforward', (details) => {
+            const skip = details.seekOffset || 10;
+            audio.currentTime = Math.min(audio.currentTime + skip, audio.duration);
+        });
 
-            navigator.mediaSession.setActionHandler('seekto', function(details) {
-                if (details.fastSeek && 'fastSeek' in audio) {
-                    audio.fastSeek(details.seekTime);
-                } else {
-                    audio.currentTime = details.seekTime;
-                }
-            });
-
-            // Update position state periodically
-            function updatePositionState() {
-                if (audio.duration && !isNaN(audio.duration)) {
-                    navigator.mediaSession.setPositionState({
-                        duration: audio.duration,
-                        playbackRate: audio.playbackRate,
-                        position: audio.currentTime
-                    });
-                }
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+            if (details.fastSeek && 'fastSeek' in audio) {
+                audio.fastSeek(details.seekTime);
+            } else {
+                audio.currentTime = details.seekTime;
             }
+        });
 
-            // Update position state when time changes
-            audio.addEventListener('timeupdate', updatePositionState);
-            audio.addEventListener('durationchange', updatePositionState);
-            audio.addEventListener('ratechange', updatePositionState);
-        }
-    }
-
-    // Wake lock API to prevent screen from sleeping during playback (optional)
-    let wakeLock = null;
-    
-    async function requestWakeLock() {
-        try {
-            if ('wakeLock' in navigator) {
-                wakeLock = await navigator.wakeLock.request('screen');
-                console.log('Wake lock active');
-            }
-        } catch (err) {
-            console.log('Wake lock failed:', err);
-        }
-    }
-
-    function releaseWakeLock() {
-        if (wakeLock) {
-            wakeLock.release();
-            wakeLock = null;
-            console.log('Wake lock released');
-        }
-    }
-
-    // Playback speed control
-    const speedControl = $("#speed-control");
-    speedControl.on("change", function () {
-        if (audio) {
-            audio.playbackRate = parseFloat(this.value);
-            // Update media session playback rate
-            if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
+        function updatePositionState() {
+            if (audio.duration && !isNaN(audio.duration)) {
                 navigator.mediaSession.setPositionState({
                     duration: audio.duration,
                     playbackRate: audio.playbackRate,
@@ -333,23 +226,47 @@ $(function () {
                 });
             }
         }
-    });
 
-    // Setup media session after audio is loaded
-    $(audio).on('loadedmetadata', setupMediaSession);
-    
-    // Update media session playback state
-    $(audio).on('play', function() {
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = 'playing';
+        audio.addEventListener('timeupdate', updatePositionState);
+        audio.addEventListener('durationchange', updatePositionState);
+        audio.addEventListener('ratechange', updatePositionState);
+    }
+
+    async function setupWakeLock() {
+        try {
+            if ('wakeLock' in navigator) {
+                wakeLock = await navigator.wakeLock.request('screen');
+                console.log("Wake lock active");
+            }
+        } catch (err) {
+            console.log("Wake lock error:", err);
+        }
+    }
+
+    function releaseWakeLock() {
+        if (wakeLock) {
+            wakeLock.release();
+            wakeLock = null;
+            console.log("Wake lock released");
+        }
+    }
+
+    $("#speed-control").on("change", function () {
+        if (audio) {
+            audio.playbackRate = parseFloat(this.value);
         }
     });
-    
-    $(audio).on('pause', function() {
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = 'paused';
-        }
-    });
 
-    console.log("Script loaded successfully");
+    // Lazy initialize on first tap
+    playPauseButton.off('click').on("click touchstart", function (e) {
+        e.preventDefault();
+        console.log("Button clicked/touched!");
+
+        if (!audioInitialized) {
+            initPlayer();
+            audioInitialized = true;
+        }
+
+        playPause();
+    });
 });
