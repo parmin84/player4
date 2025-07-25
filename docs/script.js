@@ -470,5 +470,19 @@ $(function () {
         }
         // Release wake lock when paused
         // releaseWakeLock();
+
+        $(document).ready(function() {
+    console.log("Document ready");
+    
+    // Test if elements exist
+    console.log("Play button exists:", $("#play-pause-button").length > 0);
+    console.log("Audio element exists:", audio ? "yes" : "no");
+    
+    // Test button click
+    $("#play-pause-button").on("click", function() {
+        console.log("Button clicked!");
     });
+    
+    // Test if jQuery is working
+    console.log("jQuery version:", $.fn.jquery);
 });
