@@ -57,7 +57,7 @@ body {
 }
 
 #player-track.active {
-    top: -400px;
+    top: -400px !important;
 }
 
 #album-name {
