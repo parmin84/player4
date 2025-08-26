@@ -16,36 +16,47 @@ $(function () {
     const tTime = $("#track-length");
     const i = playPauseButton.find("i");
 
-    // ✅ Play count system using localStorage
     const playCountEl = $("#play-count");
     let currentTrackKey = "anticancer_episode_1";
     let hasStartedPlaying = false;
     let playCountTimer = null;
+    const scriptURL = "https://script.google.com/macros/s/AKfycbzDhiJtlg0hlWnmrX2fcvZiIe1UzjFH1KHD-mQv5Ej3e1Nge_DMZmdCZdLOb232ZUzJ/exec";
 
-    function loadPlayCount(trackKey) {
-        return parseInt(localStorage.getItem(`playCount_${trackKey}`)) || 0;
+    let seekT, seekLoc, seekBarPos, cM, ctMinutes, ctSeconds;
+    let curMinutes, curSeconds, durMinutes, durSeconds;
+    let playProgress, bTime, nTime = 0, buffInterval = null, tFlag = false;
+
+    let audio = null;
+    let wakeLock = null;
+    let audioInitialized = false;
+
+    // ------------------ Play Count via Google Sheet ------------------
+    function fetchPlayCount(trackKey) {
+        return $.getJSON(scriptURL + "?track=" + trackKey)
+            .then(data => {
+                if (data.count !== undefined) {
+                    playCountEl.text(`Plays: ${data.count}`);
+                    return data.count;
+                } else {
+                    console.error("Invalid response from script:", data);
+                    return 0;
+                }
+            }).catch(err => {
+                console.error("Error fetching play count:", err);
+                return 0;
+            });
     }
 
-    function savePlayCount(trackKey, count) {
-        localStorage.setItem(`playCount_${trackKey}`, count);
-        playCountEl.text(`Plays: ${count}`);
-    }
-
-    function initPlayCount() {
-        const count = loadPlayCount(currentTrackKey);
-        playCountEl.text(`Plays: ${count}`);
-    }
-
-    function startPlayCountTimer() {
+    function incrementPlayCount() {
         if (hasStartedPlaying) return;
 
         playCountTimer = setTimeout(() => {
             if (!audio.paused && audio.currentTime >= 3) {
                 hasStartedPlaying = true;
-                const currentCount = loadPlayCount(currentTrackKey);
-                const newCount = currentCount + 1;
-                savePlayCount(currentTrackKey, newCount);
-                console.log(`Play count incremented to: ${newCount}`);
+                // Hit the Google Sheet script to increment
+                fetchPlayCount(currentTrackKey).then(newCount => {
+                    console.log(`Play count incremented to: ${newCount}`);
+                });
             }
         }, 3000);
     }
@@ -57,14 +68,7 @@ $(function () {
         }
     }
 
-    let seekT, seekLoc, seekBarPos, cM, ctMinutes, ctSeconds;
-    let curMinutes, curSeconds, durMinutes, durSeconds;
-    let playProgress, bTime, nTime = 0, buffInterval = null, tFlag = false;
-
-    let audio = null;
-    let wakeLock = null;
-    let audioInitialized = false;
-
+    // ------------------ Core Player Functions ------------------
     function playPause() {
         if (!audio) {
             alert("Audio not loaded yet.");
@@ -165,9 +169,7 @@ $(function () {
         }
     }
 
-    function pad(n) {
-        return n < 10 ? "0" + n : n;
-    }
+    function pad(n) { return n < 10 ? "0" + n : n; }
 
     function checkBuffering() {
         clearInterval(buffInterval);
@@ -181,6 +183,7 @@ $(function () {
         }, 100);
     }
 
+    // ------------------ Initialize Audio Player ------------------
     function initPlayer() {
         console.log("Initializing audio...");
 
@@ -208,10 +211,10 @@ $(function () {
             setupWakeLock();
         });
 
-        // ✅ Hook play/pause/ended into play count system
+        // Hook into play/pause/ended for Google Sheet
         $(audio).on("play", () => {
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
-            startPlayCountTimer();
+            incrementPlayCount();
         });
 
         $(audio).on("pause", () => {
@@ -224,11 +227,13 @@ $(function () {
             hasStartedPlaying = false;
         });
 
-        initPlayCount(); // ✅ initialize play count display
+        // Load current play count from sheet
+        fetchPlayCount(currentTrackKey);
 
         console.log("Player ready.");
     }
 
+    // ------------------ Media Session & Wake Lock ------------------
     function setupMediaSession() {
         if (!('mediaSession' in navigator)) return;
 
@@ -243,30 +248,17 @@ $(function () {
             }))
         });
 
-        navigator.mediaSession.setActionHandler('play', () => {
-            audio.play();
-        });
-
-        navigator.mediaSession.setActionHandler('pause', () => {
-            audio.pause();
-        });
-
+        navigator.mediaSession.setActionHandler('play', () => { audio.play(); });
+        navigator.mediaSession.setActionHandler('pause', () => { audio.pause(); });
         navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-            const skip = details.seekOffset || 10;
-            audio.currentTime = Math.max(audio.currentTime - skip, 0);
+            audio.currentTime = Math.max(audio.currentTime - (details.seekOffset || 10), 0);
         });
-
         navigator.mediaSession.setActionHandler('seekforward', (details) => {
-            const skip = details.seekOffset || 10;
-            audio.currentTime = Math.min(audio.currentTime + skip, audio.duration);
+            audio.currentTime = Math.min(audio.currentTime + (details.seekOffset || 10), audio.duration);
         });
-
         navigator.mediaSession.setActionHandler('seekto', (details) => {
-            if (details.fastSeek && 'fastSeek' in audio) {
-                audio.fastSeek(details.seekTime);
-            } else {
-                audio.currentTime = details.seekTime;
-            }
+            if (details.fastSeek && 'fastSeek' in audio) audio.fastSeek(details.seekTime);
+            else audio.currentTime = details.seekTime;
         });
 
         function updatePositionState() {
@@ -290,9 +282,7 @@ $(function () {
                 wakeLock = await navigator.wakeLock.request('screen');
                 console.log("Wake lock active");
             }
-        } catch (err) {
-            console.log("Wake lock error:", err);
-        }
+        } catch (err) { console.log("Wake lock error:", err); }
     }
 
     function releaseWakeLock() {
@@ -304,12 +294,9 @@ $(function () {
     }
 
     $("#speed-control").on("change", function () {
-        if (audio) {
-            audio.playbackRate = parseFloat(this.value);
-        }
+        if (audio) audio.playbackRate = parseFloat(this.value);
     });
 
-    // Lazy initialize on first tap
     playPauseButton.off('click').on("click touchstart", function (e) {
         e.preventDefault();
         console.log("Button clicked/touched!");
@@ -322,4 +309,4 @@ $(function () {
         playPause();
     });
 
-}); // ✅ main closure
+}); // main closure
