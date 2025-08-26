@@ -16,6 +16,9 @@ $(function () {
     const tTime = $("#track-length");
     const i = playPauseButton.find("i");
 
+    // 🟢 ADD THIS: New play count element reference
+    const playCountEl = $("#play-count");
+
     let seekT, seekLoc, seekBarPos, cM, ctMinutes, ctSeconds;
     let curMinutes, curSeconds, durMinutes, durSeconds;
     let playProgress, bTime, nTime = 0, buffInterval = null, tFlag = false;
@@ -23,6 +26,63 @@ $(function () {
     let audio = null;
     let wakeLock = null;
     let audioInitialized = false;
+
+    // 🟢 ADD THIS ENTIRE SECTION: Play count variables and functions
+    // =================== PLAY COUNT FUNCTIONALITY ===================
+    let currentTrackKey = 'anticancer_episode_1';
+    let playCount = 0;
+    let hasStartedPlaying = false;
+    let playCountTimer = null;
+
+    // Load play count from localStorage
+    function loadPlayCount(trackKey) {
+        // For production, use localStorage:
+        return parseInt(localStorage.getItem(`playCount_${trackKey}`)) || 0;
+        
+        // For demo, use sessionStorage:
+        // const stored = window.sessionStorage ? sessionStorage.getItem(`playCount_${trackKey}`) : null;
+        // return stored ? parseInt(stored) : 0;
+    }
+
+    // Save play count to localStorage
+    function savePlayCount(trackKey, count) {
+        // For production, use localStorage:
+        localStorage.setItem(`playCount_${trackKey}`, count);
+        
+        // For demo, use sessionStorage:
+        // if (window.sessionStorage) {
+        //     sessionStorage.setItem(`playCount_${trackKey}`, count);
+        // }
+        updatePlayCountDisplay(count);
+    }
+
+    // Update play count display
+    function updatePlayCountDisplay(count) {
+        playCountEl.text(`Plays: ${count}`);
+    }
+
+    // Increment play count when audio has been playing for 3 seconds
+    function startPlayCountTimer() {
+        if (hasStartedPlaying) return;
+        
+        playCountTimer = setTimeout(() => {
+            if (!audio.paused && audio.currentTime >= 3) {
+                hasStartedPlaying = true;
+                const currentCount = loadPlayCount(currentTrackKey);
+                const newCount = currentCount + 1;
+                savePlayCount(currentTrackKey, newCount);
+                console.log(`Play count incremented to: ${newCount}`);
+            }
+        }, 3000);
+    }
+
+    function clearPlayCountTimer() {
+        if (playCountTimer) {
+            clearTimeout(playCountTimer);
+            playCountTimer = null;
+        }
+    }
+    // =================== END PLAY COUNT FUNCTIONALITY ===================
 
     function playPause() {
         if (!audio) {
@@ -41,6 +101,8 @@ $(function () {
                 if (playPromise !== undefined) {
                     playPromise.then(() => {
                         console.log("✓ Play successful");
+                        // 🟢 ADD THIS LINE: Start play count timer on successful play
+                        startPlayCountTimer();
                     }).catch(error => {
                         console.log("✗ Play failed:", error);
                         alert("Can't play: " + error.message);
@@ -49,6 +111,8 @@ $(function () {
                         clearInterval(buffInterval);
                         albumArt.removeClass("buffering");
                         i.attr("class", "fas fa-play");
+                        // 🟢 ADD THIS LINE: Clear timer on play failure
+                        clearPlayCountTimer();
                     });
                 }
             } else {
@@ -58,44 +122,13 @@ $(function () {
                 albumArt.removeClass("buffering");
                 i.attr("class", "fas fa-play");
                 audio.pause();
+                // 🟢 ADD THIS LINE: Clear timer when paused
+                clearPlayCountTimer();
             }
         }, 300);
     }
 
-    function showHover(event) {
-        if (!audio || isNaN(audio.duration)) return;
-
-        seekBarPos = sArea.offset();
-        seekT = event.clientX - seekBarPos.left;
-        seekLoc = audio.duration * (seekT / sArea.outerWidth());
-
-        sHover.width(seekT);
-        cM = seekLoc / 60;
-        ctMinutes = Math.floor(cM);
-        ctSeconds = Math.floor(seekLoc - ctMinutes * 60);
-
-        if (ctMinutes < 0 || ctSeconds < 0) return;
-
-        if (ctMinutes < 10) ctMinutes = "0" + ctMinutes;
-        if (ctSeconds < 10) ctSeconds = "0" + ctSeconds;
-
-        seekTime.text(ctMinutes + ":" + ctSeconds).css({
-            left: seekT,
-            "margin-left": "-21px"
-        }).fadeIn(0);
-    }
-
-    function hideHover() {
-        sHover.width(0);
-        seekTime.text("00:00").css({ left: "0px", "margin-left": "0px" }).fadeOut(0);
-    }
-
-    function playFromClickedPos() {
-        if (!audio || isNaN(seekLoc)) return;
-        audio.currentTime = seekLoc;
-        seekBar.width(seekT);
-        hideHover();
-    }
+    // ... showHover, hideHover, playFromClickedPos functions stay the same ...
 
     function updateCurrTime() {
         nTime = new Date().getTime();
@@ -121,24 +154,13 @@ $(function () {
             tProgress.text("00:00");
             albumArt.removeClass("buffering active");
             clearInterval(buffInterval);
+            // 🟢 ADD THESE LINES: Reset play count state when track ends
+            clearPlayCountTimer();
+            hasStartedPlaying = false;
         }
     }
 
-    function pad(n) {
-        return n < 10 ? "0" + n : n;
-    }
-
-    function checkBuffering() {
-        clearInterval(buffInterval);
-        buffInterval = setInterval(function () {
-            if (nTime === 0 || bTime - nTime > 1000) {
-                albumArt.addClass("buffering");
-            } else {
-                albumArt.removeClass("buffering");
-            }
-            bTime = new Date().getTime();
-        }, 100);
-    }
+    // ... pad and checkBuffering functions stay the same ...
 
     function initPlayer() {
         console.log("Initializing audio...");
@@ -150,6 +172,10 @@ $(function () {
 
         albumName.text("General Recommendations");
         trackName.text("Anticancer.ca");
+
+        // 🟢 ADD THESE LINES: Load and display play count for this track
+        const initialCount = loadPlayCount(currentTrackKey);
+        updatePlayCountDisplay(initialCount);
 
         albumArt.find("img.active").removeClass("active");
         $("#_1").addClass("active");
@@ -170,12 +196,24 @@ $(function () {
         $(audio).on("play", () => {
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
         });
+        
         $(audio).on("pause", () => {
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+            // 🟢 ADD THIS LINE: Clear timer when paused
+            clearPlayCountTimer();
+        });
+
+        // 🟢 ADD THIS EVENT LISTENER: Reset state when track ends
+        $(audio).on("ended", () => {
+            clearPlayCountTimer();
+            hasStartedPlaying = false;
         });
 
         console.log("Player ready.");
     }
+
+    // ... rest of your functions stay exactly the same ...
+});
 
     function setupMediaSession() {
         if (!('mediaSession' in navigator)) return;
