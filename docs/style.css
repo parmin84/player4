@@ -23,8 +23,8 @@ body {
     right: 0;
     left: 0;
     width: 400px;
-    height: 400px;
-    margin: -200px auto;
+    height: 500px;
+    margin: -250px auto;
 }
 
 #player-bg-layer {
@@ -46,7 +46,7 @@ body {
 
 #player-track {
     position: absolute;
-    top: -20px; /* Moved down from 0 to hide it better when retracted */
+    top: 0; /* Moved down from 0 to hide it better when retracted */
     right: 15px;
     left: 15px;
     padding: 20px 22px 30px 150px;
@@ -57,7 +57,7 @@ body {
 }
 
 #player-track.active {
-    top: -120px; /* Ensures full visibility while reducing excessive movement */
+    top: -100px; /* Ensures full visibility while reducing excessive movement */
 }
 
 #album-name {
