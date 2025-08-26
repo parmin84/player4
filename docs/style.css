@@ -72,6 +72,18 @@ body {
     margin: 2px 0 5px 0;
 }
 
+#play-count {
+    color: #395ABD;
+    font-size: 11px;
+    font-weight: 600;
+    margin: 5px 0;
+    padding: 4px 8px;
+    background-color: rgba(57, 90, 189, 0.1);
+    border-radius: 10px;
+    display: inline-block;
+    border: 1px solid rgba(57, 90, 189, 0.2);
+}
+
 #track-time {
     height: 12px;
     margin-bottom: 3px;
