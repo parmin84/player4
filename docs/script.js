@@ -41,23 +41,54 @@ $(function () {
     }
 
     function startPlayCountTimer() {
-        if (hasStartedPlaying) return;
+        console.log("startPlayCountTimer called", {
+            hasStartedPlaying,
+            currentTime: audio ? audio.currentTime : null
+        });
+
+        if (hasStartedPlaying) {
+            console.log("Play count already started for this track, exiting.");
+            return;
+        }
 
         playCountTimer = setTimeout(() => {
+            if (!audio) {
+                console.error("Audio not initialized, cannot increment play count.");
+                return;
+            }
+
+            console.log("Checking if audio has played 3 seconds...", audio.currentTime);
+
             if (!audio.paused && audio.currentTime >= 3) {
                 hasStartedPlaying = true;
 
-                // Increment local count
+                // --- LocalStorage increment ---
                 const currentCount = loadPlayCount(currentTrackKey);
                 const newCount = currentCount + 1;
                 savePlayCount(currentTrackKey, newCount);
-                console.log(`Play count incremented locally: ${newCount}`);
+                console.log(`Local play count incremented: ${newCount}`);
 
-                // Increment count in Google Sheet
-                fetch(`https://script.google.com/macros/s/AKfycbzDhiJtlg0hlWnmrX2fcvZiIe1UzjFH1KHD-mQv5Ej3e1Nge_DMZmdCZdLOb232ZUzJ/exec?track=${currentTrackKey}`)
-                    .then(res => res.json())
-                    .then(data => console.log(`Play count updated on Sheet: ${data.count}`))
-                    .catch(err => console.error("Error updating Sheet:", err));
+                // --- Google Sheets increment ---
+                const url = `https://script.google.com/macros/s/AKfycbzDhiJtlg0hlWnmrX2fcvZiIe1UzjFH1KHD-mQv5Ej3e1Nge_DMZmdCZdLOb232ZUzJ/exec?track=${currentTrackKey}`;
+                console.log("Fetching URL:", url);
+
+                fetch(url)
+                    .then(res => {
+                        console.log("Fetch response status:", res.status);
+                        return res.json();
+                    })
+                    .then(data => {
+                        console.log("Fetch response data:", data);
+                        if (data.count !== undefined) {
+                            playCountEl.text(`Plays: ${data.count}`);
+                            console.log("Play count updated on Sheet:", data.count);
+                        } else if (data.error) {
+                            console.warn("Apps Script returned an error:", data.error);
+                        }
+                    })
+                    .catch(err => console.error("Fetch failed:", err));
+            } else {
+                console.log("Audio has not reached 3 seconds yet or is paused. Timer will try again next play.");
             }
         }, 3000);
     }
@@ -92,9 +123,8 @@ $(function () {
                 checkBuffering();
                 i.attr("class", "fas fa-pause");
 
-                audio.play().then(() => {
-                    console.log("✓ Play successful");
-                }).catch(err => {
+                audio.play().then(() => console.log("✓ Play successful"))
+                .catch(err => {
                     console.error("✗ Play failed:", err);
                     playerTrack.removeClass("active");
                     albumArt.removeClass("active");
@@ -102,7 +132,6 @@ $(function () {
                     albumArt.removeClass("buffering");
                     i.attr("class", "fas fa-play");
                 });
-
             } else {
                 playerTrack.removeClass("active");
                 albumArt.removeClass("active");
