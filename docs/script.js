@@ -16,7 +16,7 @@ $(function () {
     const tTime = $("#track-length");
     const i = playPauseButton.find("i");
 
-    // 🟢 ADD THIS: New play count element reference
+    // Play count elements
     const playCountEl = $("#play-count");
     let playCount = 0;
 
@@ -29,8 +29,8 @@ $(function () {
     let audioInitialized = false;
 
     function updatePlayCount() {
-    playCount++;
-    playCountEl.text(`Plays: ${playCount}`);
+        playCount++;
+        playCountEl.text(`Plays: ${playCount}`);
     }
     
     function playPause() {
@@ -72,7 +72,40 @@ $(function () {
         }, 300);
     }
 
-    // ... showHover, hideHover, playFromClickedPos functions stay the same ...
+    function showHover(event) {
+        if (!audio || isNaN(audio.duration)) return;
+
+        seekBarPos = sArea.offset();
+        seekT = event.clientX - seekBarPos.left;
+        seekLoc = audio.duration * (seekT / sArea.outerWidth());
+
+        sHover.width(seekT);
+        cM = seekLoc / 60;
+        ctMinutes = Math.floor(cM);
+        ctSeconds = Math.floor(seekLoc - ctMinutes * 60);
+
+        if (ctMinutes < 0 || ctSeconds < 0) return;
+
+        if (ctMinutes < 10) ctMinutes = "0" + ctMinutes;
+        if (ctSeconds < 10) ctSeconds = "0" + ctSeconds;
+
+        seekTime.text(ctMinutes + ":" + ctSeconds).css({
+            left: seekT,
+            "margin-left": "-21px"
+        }).fadeIn(0);
+    }
+
+    function hideHover() {
+        sHover.width(0);
+        seekTime.text("00:00").css({ left: "0px", "margin-left": "0px" }).fadeOut(0);
+    }
+
+    function playFromClickedPos() {
+        if (!audio || isNaN(seekLoc)) return;
+        audio.currentTime = seekLoc;
+        seekBar.width(seekT);
+        hideHover();
+    }
 
     function updateCurrTime() {
         nTime = new Date().getTime();
@@ -101,7 +134,21 @@ $(function () {
         }
     }
 
-    // ... pad and checkBuffering functions stay the same ...
+    function pad(n) {
+        return n < 10 ? "0" + n : n;
+    }
+
+    function checkBuffering() {
+        clearInterval(buffInterval);
+        buffInterval = setInterval(function () {
+            if (nTime === 0 || bTime - nTime > 1000) {
+                albumArt.addClass("buffering");
+            } else {
+                albumArt.removeClass("buffering");
+            }
+            bTime = new Date().getTime();
+        }, 100);
+    }
 
     function initPlayer() {
         console.log("Initializing audio...");
@@ -140,9 +187,6 @@ $(function () {
 
         console.log("Player ready.");
     }
-
-    // ... rest of your functions stay exactly the same ...
-});
 
     function setupMediaSession() {
         if (!('mediaSession' in navigator)) return;
@@ -236,4 +280,5 @@ $(function () {
 
         playPause();
     });
-});
+
+}); // This is the ONLY closing bracket for the main function
