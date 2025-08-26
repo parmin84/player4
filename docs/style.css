@@ -46,10 +46,10 @@ body {
 
 #player-track {
     position: absolute;
-    top: 20px; /* Moved down from 0 to hide it better when retracted */
+    top: -20px; /* Moved down from 0 to hide it better when retracted */
     right: 15px;
     left: 15px;
-    padding: 20px 22px 30px 200px;
+    padding: 20px 22px 30px 150px;
     background-color: #d9e2fa;
     border-radius: 15px 15px 0 0;
     transition: 0.3s ease top;
