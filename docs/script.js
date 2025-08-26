@@ -16,9 +16,46 @@ $(function () {
     const tTime = $("#track-length");
     const i = playPauseButton.find("i");
 
-    // Play count elements
+    // ✅ Play count system using localStorage
     const playCountEl = $("#play-count");
-    let playCount = 0;
+    let currentTrackKey = "anticancer_episode_1";
+    let hasStartedPlaying = false;
+    let playCountTimer = null;
+
+    function loadPlayCount(trackKey) {
+        return parseInt(localStorage.getItem(`playCount_${trackKey}`)) || 0;
+    }
+
+    function savePlayCount(trackKey, count) {
+        localStorage.setItem(`playCount_${trackKey}`, count);
+        playCountEl.text(`Plays: ${count}`);
+    }
+
+    function initPlayCount() {
+        const count = loadPlayCount(currentTrackKey);
+        playCountEl.text(`Plays: ${count}`);
+    }
+
+    function startPlayCountTimer() {
+        if (hasStartedPlaying) return;
+
+        playCountTimer = setTimeout(() => {
+            if (!audio.paused && audio.currentTime >= 3) {
+                hasStartedPlaying = true;
+                const currentCount = loadPlayCount(currentTrackKey);
+                const newCount = currentCount + 1;
+                savePlayCount(currentTrackKey, newCount);
+                console.log(`Play count incremented to: ${newCount}`);
+            }
+        }, 3000);
+    }
+
+    function clearPlayCountTimer() {
+        if (playCountTimer) {
+            clearTimeout(playCountTimer);
+            playCountTimer = null;
+        }
+    }
 
     let seekT, seekLoc, seekBarPos, cM, ctMinutes, ctSeconds;
     let curMinutes, curSeconds, durMinutes, durSeconds;
@@ -28,11 +65,6 @@ $(function () {
     let wakeLock = null;
     let audioInitialized = false;
 
-    function updatePlayCount() {
-        playCount++;
-        playCountEl.text(`Plays: ${playCount}`);
-    }
-    
     function playPause() {
         if (!audio) {
             alert("Audio not loaded yet.");
@@ -50,7 +82,6 @@ $(function () {
                 if (playPromise !== undefined) {
                     playPromise.then(() => {
                         console.log("✓ Play successful");
-                        // Removed updatePlayCount() from here
                     }).catch(error => {
                         console.log("✗ Play failed:", error);
                         alert("Can't play: " + error.message);
@@ -177,17 +208,23 @@ $(function () {
             setupWakeLock();
         });
 
-        // ✅ Increment play count when audio actually starts playing
+        // ✅ Hook play/pause/ended into play count system
         $(audio).on("play", () => {
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
-            if (audio.currentTime === 0) {
-                updatePlayCount();
-            }
+            startPlayCountTimer();
         });
-        
+
         $(audio).on("pause", () => {
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+            clearPlayCountTimer();
         });
+
+        $(audio).on("ended", () => {
+            clearPlayCountTimer();
+            hasStartedPlaying = false;
+        });
+
+        initPlayCount(); // ✅ initialize play count display
 
         console.log("Player ready.");
     }
@@ -285,4 +322,4 @@ $(function () {
         playPause();
     });
 
-}); // This is the ONLY closing bracket for the main function
+}); // ✅ main closure
