@@ -1,8 +1,10 @@
 $(function () {
     console.log("Script starting...");
 
+    // =======================
+    // DOM Elements
+    // =======================
     const playerTrack = $("#player-track");
-    const bgArtwork = $("#player-bg-artwork");
     const albumName = $("#album-name");
     const trackName = $("#track-name");
     const albumArt = $("#album-art");
@@ -15,48 +17,47 @@ $(function () {
     const tProgress = $("#current-time");
     const tTime = $("#track-length");
     const i = playPauseButton.find("i");
-
     const playCountEl = $("#play-count");
+
+    // =======================
+    // Play Count / Track System
+    // =======================
     let currentTrackKey = "anticancer_episode_1";
     let hasStartedPlaying = false;
     let playCountTimer = null;
-    const scriptURL = "https://script.google.com/macros/s/AKfycbzDhiJtlg0hlWnmrX2fcvZiIe1UzjFH1KHD-mQv5Ej3e1Nge_DMZmdCZdLOb232ZUzJ/exec";
 
-    let seekT, seekLoc, seekBarPos, cM, ctMinutes, ctSeconds;
-    let curMinutes, curSeconds, durMinutes, durSeconds;
-    let playProgress, bTime, nTime = 0, buffInterval = null, tFlag = false;
-
-    let audio = null;
-    let wakeLock = null;
-    let audioInitialized = false;
-
-    // ------------------ Play Count via Google Sheet ------------------
-    function fetchPlayCount(trackKey) {
-        return $.getJSON(scriptURL + "?track=" + trackKey)
-            .then(data => {
-                if (data.count !== undefined) {
-                    playCountEl.text(`Plays: ${data.count}`);
-                    return data.count;
-                } else {
-                    console.error("Invalid response from script:", data);
-                    return 0;
-                }
-            }).catch(err => {
-                console.error("Error fetching play count:", err);
-                return 0;
-            });
+    function loadPlayCount(trackKey) {
+        return parseInt(localStorage.getItem(`playCount_${trackKey}`)) || 0;
     }
 
-    function incrementPlayCount() {
+    function savePlayCount(trackKey, count) {
+        localStorage.setItem(`playCount_${trackKey}`, count);
+        playCountEl.text(`Plays: ${count}`);
+    }
+
+    function initPlayCount() {
+        const count = loadPlayCount(currentTrackKey);
+        playCountEl.text(`Plays: ${count}`);
+    }
+
+    function startPlayCountTimer() {
         if (hasStartedPlaying) return;
 
         playCountTimer = setTimeout(() => {
             if (!audio.paused && audio.currentTime >= 3) {
                 hasStartedPlaying = true;
-                // Hit the Google Sheet script to increment
-                fetchPlayCount(currentTrackKey).then(newCount => {
-                    console.log(`Play count incremented to: ${newCount}`);
-                });
+
+                // Increment local count
+                const currentCount = loadPlayCount(currentTrackKey);
+                const newCount = currentCount + 1;
+                savePlayCount(currentTrackKey, newCount);
+                console.log(`Play count incremented locally: ${newCount}`);
+
+                // Increment count in Google Sheet
+                fetch(`https://script.google.com/macros/s/AKfycbzDhiJtlg0hlWnmrX2fcvZiIe1UzjFH1KHD-mQv5Ej3e1Nge_DMZmdCZdLOb232ZUzJ/exec?track=${currentTrackKey}`)
+                    .then(res => res.json())
+                    .then(data => console.log(`Play count updated on Sheet: ${data.count}`))
+                    .catch(err => console.error("Error updating Sheet:", err));
             }
         }, 3000);
     }
@@ -68,34 +69,40 @@ $(function () {
         }
     }
 
-    // ------------------ Core Player Functions ------------------
-    function playPause() {
-        if (!audio) {
-            alert("Audio not loaded yet.");
-            return;
-        }
+    // =======================
+    // Audio Variables
+    // =======================
+    let seekT, seekLoc, seekBarPos, cM, ctMinutes, ctSeconds;
+    let curMinutes, curSeconds, durMinutes, durSeconds;
+    let playProgress, bTime, nTime = 0, buffInterval = null, tFlag = false;
+    let audio = null;
+    let wakeLock = null;
+    let audioInitialized = false;
 
-        setTimeout(function () {
+    // =======================
+    // Play / Pause Logic
+    // =======================
+    function playPause() {
+        if (!audio) return alert("Audio not loaded yet.");
+
+        setTimeout(() => {
             if (audio.paused) {
                 playerTrack.addClass("active");
                 albumArt.addClass("active");
                 checkBuffering();
                 i.attr("class", "fas fa-pause");
 
-                const playPromise = audio.play();
-                if (playPromise !== undefined) {
-                    playPromise.then(() => {
-                        console.log("✓ Play successful");
-                    }).catch(error => {
-                        console.log("✗ Play failed:", error);
-                        alert("Can't play: " + error.message);
-                        playerTrack.removeClass("active");
-                        albumArt.removeClass("active");
-                        clearInterval(buffInterval);
-                        albumArt.removeClass("buffering");
-                        i.attr("class", "fas fa-play");
-                    });
-                }
+                audio.play().then(() => {
+                    console.log("✓ Play successful");
+                }).catch(err => {
+                    console.error("✗ Play failed:", err);
+                    playerTrack.removeClass("active");
+                    albumArt.removeClass("active");
+                    clearInterval(buffInterval);
+                    albumArt.removeClass("buffering");
+                    i.attr("class", "fas fa-play");
+                });
+
             } else {
                 playerTrack.removeClass("active");
                 albumArt.removeClass("active");
@@ -107,6 +114,9 @@ $(function () {
         }, 300);
     }
 
+    // =======================
+    // Seek / Hover
+    // =======================
     function showHover(event) {
         if (!audio || isNaN(audio.duration)) return;
 
@@ -120,7 +130,6 @@ $(function () {
         ctSeconds = Math.floor(seekLoc - ctMinutes * 60);
 
         if (ctMinutes < 0 || ctSeconds < 0) return;
-
         if (ctMinutes < 10) ctMinutes = "0" + ctMinutes;
         if (ctSeconds < 10) ctSeconds = "0" + ctSeconds;
 
@@ -142,6 +151,9 @@ $(function () {
         hideHover();
     }
 
+    // =======================
+    // Time Updates
+    // =======================
     function updateCurrTime() {
         nTime = new Date().getTime();
         if (!tFlag) {
@@ -169,11 +181,13 @@ $(function () {
         }
     }
 
-    function pad(n) { return n < 10 ? "0" + n : n; }
+    function pad(n) {
+        return n < 10 ? "0" + n : n;
+    }
 
     function checkBuffering() {
         clearInterval(buffInterval);
-        buffInterval = setInterval(function () {
+        buffInterval = setInterval(() => {
             if (nTime === 0 || bTime - nTime > 1000) {
                 albumArt.addClass("buffering");
             } else {
@@ -183,7 +197,9 @@ $(function () {
         }, 100);
     }
 
-    // ------------------ Initialize Audio Player ------------------
+    // =======================
+    // Initialize Player
+    // =======================
     function initPlayer() {
         console.log("Initializing audio...");
 
@@ -199,7 +215,7 @@ $(function () {
         $("#_1").addClass("active");
 
         const bgArtworkUrl = $("#_1").attr("src");
-        bgArtwork.css({ "background-image": "url(" + bgArtworkUrl + ")" });
+        $("#player-bg-artwork").css({ "background-image": `url(${bgArtworkUrl})` });
 
         sArea.mousemove(showHover);
         sArea.mouseout(hideHover);
@@ -211,10 +227,10 @@ $(function () {
             setupWakeLock();
         });
 
-        // Hook into play/pause/ended for Google Sheet
+        // ✅ Play count hooks
         $(audio).on("play", () => {
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
-            incrementPlayCount();
+            startPlayCountTimer();
         });
 
         $(audio).on("pause", () => {
@@ -227,19 +243,20 @@ $(function () {
             hasStartedPlaying = false;
         });
 
-        // Load current play count from sheet
-        fetchPlayCount(currentTrackKey);
+        initPlayCount();
 
         console.log("Player ready.");
     }
 
-    // ------------------ Media Session & Wake Lock ------------------
+    // =======================
+    // Media Session / Wake Lock
+    // =======================
     function setupMediaSession() {
         if (!('mediaSession' in navigator)) return;
 
         navigator.mediaSession.metadata = new MediaMetadata({
-            title: trackName.text() || 'Audio Track',
-            artist: albumName.text() || 'Unknown Artist',
+            title: trackName.text(),
+            artist: albumName.text(),
             album: 'Audio Player',
             artwork: [96, 128, 192, 256, 384, 512].map(size => ({
                 src: $('#_1').attr('src'),
@@ -248,13 +265,15 @@ $(function () {
             }))
         });
 
-        navigator.mediaSession.setActionHandler('play', () => { audio.play(); });
-        navigator.mediaSession.setActionHandler('pause', () => { audio.pause(); });
+        navigator.mediaSession.setActionHandler('play', () => audio.play());
+        navigator.mediaSession.setActionHandler('pause', () => audio.pause());
         navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-            audio.currentTime = Math.max(audio.currentTime - (details.seekOffset || 10), 0);
+            const skip = details.seekOffset || 10;
+            audio.currentTime = Math.max(audio.currentTime - skip, 0);
         });
         navigator.mediaSession.setActionHandler('seekforward', (details) => {
-            audio.currentTime = Math.min(audio.currentTime + (details.seekOffset || 10), audio.duration);
+            const skip = details.seekOffset || 10;
+            audio.currentTime = Math.min(audio.currentTime + skip, audio.duration);
         });
         navigator.mediaSession.setActionHandler('seekto', (details) => {
             if (details.fastSeek && 'fastSeek' in audio) audio.fastSeek(details.seekTime);
@@ -282,7 +301,9 @@ $(function () {
                 wakeLock = await navigator.wakeLock.request('screen');
                 console.log("Wake lock active");
             }
-        } catch (err) { console.log("Wake lock error:", err); }
+        } catch (err) {
+            console.log("Wake lock error:", err);
+        }
     }
 
     function releaseWakeLock() {
@@ -293,20 +314,23 @@ $(function () {
         }
     }
 
+    // =======================
+    // Speed Control
+    // =======================
     $("#speed-control").on("change", function () {
         if (audio) audio.playbackRate = parseFloat(this.value);
     });
 
+    // =======================
+    // Initialize on First Click
+    // =======================
     playPauseButton.off('click').on("click touchstart", function (e) {
         e.preventDefault();
         console.log("Button clicked/touched!");
-
         if (!audioInitialized) {
             initPlayer();
             audioInitialized = true;
         }
-
         playPause();
     });
-
-}); // main closure
+});
