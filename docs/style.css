@@ -23,8 +23,8 @@ body {
     right: 0;
     left: 0;
     width: 400px;
-    height: 500px;
-    margin: -250px auto;
+    height: 400px;
+    margin: -200px auto;
 }
 
 #player-bg-layer {
@@ -165,7 +165,7 @@ body {
 
 #player-content {
     position: relative;
-    height: 120px; /* Reduced from 100% to a fixed height */
+    height: 160px; /* Reduced from 100% to a fixed height */
     background-color: #fff;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     border-radius: 15px;
@@ -173,7 +173,7 @@ body {
     display: flex;
     align-items: center;
     padding: 0 20px;
-    margin-top: 80px; /* Push it down to make room for the popup */
+    margin-top: 60px; /* Push it down to make room for the popup */
 }
 
 #album-art {
