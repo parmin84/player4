@@ -50,7 +50,7 @@ $(function () {
                 if (playPromise !== undefined) {
                     playPromise.then(() => {
                         console.log("✓ Play successful");
-                        updatePlayCount();
+                        // Removed updatePlayCount() from here
                     }).catch(error => {
                         console.log("✗ Play failed:", error);
                         alert("Can't play: " + error.message);
@@ -177,8 +177,12 @@ $(function () {
             setupWakeLock();
         });
 
+        // ✅ Increment play count when audio actually starts playing
         $(audio).on("play", () => {
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+            if (audio.currentTime === 0) {
+                updatePlayCount();
+            }
         });
         
         $(audio).on("pause", () => {
