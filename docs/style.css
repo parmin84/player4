@@ -46,10 +46,10 @@ body {
 
 #player-track {
     position: absolute;
-    top: 60px; /* Moved down from 0 to hide it better when retracted */
+    top: 100px; /* Moved down from 0 to hide it better when retracted */
     right: 15px;
     left: 15px;
-    padding: 20px 22px 30px 100px;
+    padding: 20px 22px 30px 110px;
     background-color: #d9e2fa;
     border-radius: 15px 15px 0 0;
     transition: 0.3s ease top;
@@ -57,7 +57,7 @@ body {
 }
 
 #player-track.active {
-    top: -70px; /* Ensures full visibility while reducing excessive movement */
+    top: -100px; /* Ensures full visibility while reducing excessive movement */
 }
 
 #album-name {
