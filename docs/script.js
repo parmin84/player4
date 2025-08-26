@@ -143,7 +143,7 @@ $(function () {
     function initPlayer() {
         console.log("Initializing audio...");
 
-        audio = new Audio("https://raw.githubusercontent.com/parmin84/audio-player/main/11labs_studio.mp3");
+        audio = new Audio("https://raw.githubusercontent.com/parmin84/audio-player/main/episode_1_sped_up%20(1).mp3");
         audio.loop = false;
         audio.preload = 'metadata';
         audio.crossOrigin = 'anonymous';
